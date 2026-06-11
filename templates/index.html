@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCU / MOC Freight Calculator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="page-wrap">
+        <div class="card-shell">
+            <h1>Oleo Sumas MCU / MOC Freight Calculator</h1>
+            <p class="subtext">
+                Enter MCU delivery details, connect each MCU delivery to its MOC version, and calculate freight, gallons, and product cost automatically.
+            </p>
+
+            {% if error %}
+                <div class="error-box">{{ error }}</div>
+            {% endif %}
+
+            <form method="POST">
+                <div class="top-grid">
+                    <div class="field-group">
+                        <label for="total_freight">Total Freight</label>
+                        <input id="total_freight" type="number" step="any" name="total_freight" value="{{ request.form.get('total_freight', '') }}" required>
+                    </div>
+                    <div class="field-group">
+                        <label for="product_unit_cost">MCU Product Unit Cost</label>
+                        <input id="product_unit_cost" type="number" step="any" name="product_unit_cost" value="{{ request.form.get('product_unit_cost', '') }}" required>
+                    </div>
+                </div>
+
+                <div class="section-head">
+                    <h2>Delivery Input</h2>
+                    <button type="button" class="btn btn-primary" onclick="addRow()">+ Add Row</button>
+                </div>
+
+                <div class="table-wrap">
+                    <table id="inputTable">
+                        <thead>
+                            <tr>
+                                <th>Delivery #</th>
+                                <th>MCU Liters</th>
+                                <th class="remove-col">Remove</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            {% set posted_pairs = request.form.getlist('delivery_pair') %}
+                            {% set posted_liters = request.form.getlist('mcu_liters') %}
+                            {% if posted_pairs %}
+                                {% for i in range(posted_pairs|length) %}
+                                <tr>
+                                    <td><input type="text" name="delivery_pair" placeholder="Lynden/10964247" value="{{ posted_pairs[i] }}"></td>
+                                    <td><input type="number" step="any" name="mcu_liters" placeholder="8756.5" value="{{ posted_liters[i] if i < posted_liters|length else '' }}"></td>
+                                    <td class="remove-col"><button type="button" class="btn btn-danger btn-square" onclick="removeRow(this)">x</button></td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td><input type="text" name="delivery_pair" placeholder="Lynden/10964247"></td>
+                                    <td><input type="number" step="any" name="mcu_liters" placeholder="8756.5"></td>
+                                    <td class="remove-col"><button type="button" class="btn btn-danger btn-square" onclick="removeRow(this)">x</button></td>
+                                </tr>
+                                <tr>
+                                    <td><input type="text" name="delivery_pair" placeholder="10976440/10976449"></td>
+                                    <td><input type="number" step="any" name="mcu_liters" placeholder="8756.5"></td>
+                                    <td class="remove-col"><button type="button" class="btn btn-danger btn-square" onclick="removeRow(this)">x</button></td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="action-row">
+                    <button type="submit" class="btn btn-primary">Calculate</button>
+                </div>
+            </form>
+
+            {% if results %}
+                <div class="results-section">
+                    <h2>Summary</h2>
+                    <div class="summary-grid">
+                        <div class="summary-box"><span>Total MCU Liters</span><strong>{{ '%.2f'|format(results.total_liters) }}</strong></div>
+                        <div class="summary-box"><span>Total Freight Entered</span><strong>{{ '%.2f'|format(results.total_freight) }}</strong></div>
+                        <div class="summary-box"><span>Freight Unit Cost</span><strong>{{ '%.6f'|format(results.freight_unit_cost) }}</strong></div>
+                        <div class="summary-box"><span>MCU Product Unit Cost</span><strong>{{ '%.6f'|format(results.product_unit_cost) }}</strong></div>
+                        <div class="summary-box"><span>Freight Total Check</span><strong>{{ '%.2f'|format(results.total_freight_check) }}</strong></div>
+                        <div class="summary-box"><span>Total MCU Product Cost</span><strong>{{ '%.2f'|format(results.total_product_cost) }}</strong></div>
+                    </div>
+
+                    <h2>Calculated Rows</h2>
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>MCU Delivery #</th>
+                                    <th>MOC Delivery #</th>
+                                    <th>MCU Liters</th>
+                                    <th>MOC Gallons</th>
+                                    <th>Freight Total</th>
+                                    <th>MCU Cost Total</th>
+                                    <th>Lynden Freight Cost</th>
+                                    <th>Lynden Product Cost</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in results.rows %}
+                                <tr>
+                                    <td>{{ row.mcu_delivery_number }}</td>
+                                    <td>{{ row.moc_delivery_number }}</td>
+                                    <td>{{ '%.2f'|format(row.mcu_liters) }}</td>
+                                    <td>{{ '%.2f'|format(row.moc_gallons) }}</td>
+                                    <td>{{ '%.2f'|format(row.freight_total) }}</td>
+                                    <td>{{ '%.2f'|format(row.mcu_cost_total) }}</td>
+                                    <td>{% if row.lynden_freight_cost is not none %}{{ '%.6f'|format(row.lynden_freight_cost) }}{% else %}-{% endif %}</td>
+                                    <td>{% if row.lynden_product_cost is not none %}{{ '%.6f'|format(row.lynden_product_cost) }}{% else %}-{% endif %}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                    {% if results.moc_delivery_numbers %}
+                    <div class="moc-list">
+                        <h3>MOC Delivery Numbers</h3>
+                        <p>{{ results.moc_delivery_numbers }}</p>
+                    </div>
+                    {% endif %}
+                <div class="action-row">
+                    <button type="button" class="btn btn-secondary" onclick="restart()">Restart / New Calculation</button>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        function addRow() {
+            const tableBody = document.getElementById('tableBody');
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><input type="text" name="delivery_pair" placeholder="10976440/10976449"></td>
+                <td><input type="number" step="any" name="mcu_liters" placeholder="8756.5"></td>
+                <td class="remove-col"><button type="button" class="btn btn-danger btn-square" onclick="removeRow(this)">x</button></td>
+            `;
+            tableBody.appendChild(row);
+        }
+
+        function removeRow(button) {
+            const tableBody = document.getElementById('tableBody');
+            if (tableBody.rows.length > 1) {
+                button.closest('tr').remove();
+            }
+        }
+
+        function restart() {
+            // Navigate to the page root (GET) to clear POSTed form data and results
+            window.location.href = window.location.pathname;
+        }
+    </script>
+</body>
+</html>
